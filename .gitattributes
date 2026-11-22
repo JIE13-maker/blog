@@ -1,0 +1,2 @@
+# 确保 shell 脚本在 Linux 构建环境中保持 LF 换行（CRLF 会导致 bash 执行失败）
+*.sh text eol=lf
