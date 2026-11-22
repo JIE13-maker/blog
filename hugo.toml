@@ -1,0 +1,88 @@
+# ============================================================
+# 站点基础配置
+# 部署后请把 baseURL 改成你的实际域名（如 https://xxx.pages.dev/）
+# ============================================================
+baseURL = 'https://example.org/'
+title = 'JIE13 的博客'
+theme = 'FixIt'
+
+# 语言与中文支持
+defaultContentLanguage = 'zh-cn'
+locale = 'zh-CN'
+hasCJKLanguage = true
+timeZone = 'Asia/Shanghai'
+enableEmoji = true
+enableRobotsTXT = true
+
+# 分类法（FixIt 需要 author 来生成作者归档页）
+[taxonomies]
+  category = 'categories'
+  tag = 'tags'
+  author = 'authors'
+
+# 输出格式：主题不能配置 outputs，需在站点显式声明
+# 开启 search 才会生成搜索索引 search.json
+[outputs]
+  home = ['html', 'rss', 'archives', 'search', 'offline', 'manifest', 'link']
+  page = ['html']
+  section = ['html', 'rss']
+  taxonomy = ['html']
+  term = ['html', 'rss']
+
+# ============================================================
+# 站点参数（其余继承 FixIt 主题默认值）
+# ============================================================
+[params]
+  description = '记录学习与生活'
+  version = '1.0.X'
+
+  [params.author]
+    name = 'JIE13'
+    email = ''
+    link = ''
+    avatar = ''
+
+# ============================================================
+# 中文菜单
+# ============================================================
+[menus]
+  [[menus.main]]
+    identifier = 'home'
+    name = '首页'
+    url = '/'
+    weight = 1
+  [[menus.main]]
+    identifier = 'archives'
+    name = '归档'
+    url = 'archives/'
+    weight = 2
+  [[menus.main]]
+    identifier = 'categories'
+    name = '分类'
+    url = 'categories/'
+    weight = 3
+  [[menus.main]]
+    identifier = 'tags'
+    name = '标签'
+    url = 'tags/'
+    weight = 4
+
+# ============================================================
+# 首页个人简介（开启后首页更美观）
+# ============================================================
+[params.home.profile]
+  enable = true
+  title = 'JIE13'
+  subtitle = '记录学习与生活'
+  typeit = false
+  social = true
+  fullscreen = false
+
+# ============================================================
+# 搜索：FixIt 默认开启本地 fuse 搜索，这里显式确认
+# 纯静态、免费、不依赖第三方服务
+# ============================================================
+[params.search]
+  enable = true
+  type = 'fuse'
+  placeholder = '搜索文章...'

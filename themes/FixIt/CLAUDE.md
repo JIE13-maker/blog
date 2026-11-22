@@ -1,0 +1,216 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Overview
+
+FixIt is a modern, responsive theme for the Hugo static site generator. Built with Hugo templates, SCSS, UnoCSS, and TypeScript.
+
+## Development Commands
+
+### Prerequisites
+
+- Node.js >= 20
+- Hugo Extended >= 0.166.0 (Dart Sass required)
+- pnpm
+
+### Development
+
+```bash
+pnpm install           # Install dependencies
+pnpm dev:demo          # Start demo site dev server
+pnpm dev:test          # Start test site dev server
+pnpm dev:docs          # Start docs dev server (requires fixit-docs as sibling directory)
+```
+
+### Build
+
+```bash
+pnpm build:demo        # Build demo site
+pnpm build:test        # Build test site
+pnpm build             # Build all sites (demo + test, merged into public/)
+pnpm preview           # Preview built site (requires build first)
+```
+
+### Code Generation
+
+```bash
+pnpm gen:lexers        # Regenerate assets/scss/core/maps/_chroma-lexers.scss from Chroma source
+pnpm gen:docs          # Regenerate English theme config and partials docs into ../fixit-docs
+```
+
+### Documentation
+
+When theme params are added, removed, or renamed, or Hugo templates/partials (including shortcodes and render hooks) are added, removed, or renamed:
+
+1. Run `pnpm gen:docs`.
+2. Update the corresponding pages in `../fixit-docs/content/en/` and `../fixit-docs/content/zh-cn/`.
+3. `gen:docs` regenerates English pages only; manually sync the Chinese translations.
+4. Do not hand-edit content between the `HUGO_FIXIT_PARAMS` or `HUGO_FIXIT_PARTIALS` markers; regenerate it instead.
+5. Run `pnpm -C ../fixit-docs lint` after editing docs.
+
+### Code Quality
+
+```bash
+pnpm lint              # Run ESLint
+pnpm typecheck         # Run TypeScript type checking
+```
+
+There are no unit tests. Verify changes by building `pnpm build:demo` or `pnpm build:test` and inspecting the output.
+
+## Architecture
+
+### Monorepo Structure
+
+Root `package.json` is `@hugo-fixit/core`. pnpm workspaces include `apps/*` and `packages/*`:
+
+- `apps/demo/` — Demo site (deployed to `demo.fixit.lruihao.cn`)
+- `apps/test/` — Test site for exercising theme features
+- `packages/shared` — Shared utilities (exports `workspaceRoot`, `fromRoot`, `runCommand`, `capitalize`, `consola`)
+- `packages/versioning` — Version management (auto-updates version in `layouts/_partials/init/index.html` during pre-commit)
+- `packages/integration` — Post-build: merges demo/test output into `public/`
+- `packages/chroma-lexers` — Generates Chroma lexer SCSS map from GitHub
+
+### JavaScript Module System (`assets/js/`)
+
+Service-class architecture with direct constructor calls:
+
+- **`main.ts`** — Entry point. Instantiates all modules with direct constructor calls, builds the typed `window.fixit` public API facade, and runs the init sequence on `DOMContentLoaded`.
+- **`types/`** — TypeScript type definitions:
+  - `config.ts` — `FixItConfig` and all config sub-types.
+  - `ui.ts` — `FixItPublicAPI`, global `window` augmentation for third-party libs.
+  - `third-party.ts` — Types for vendored libraries.
+- **`core/`** — Infrastructure layer:
+  - `event-bus.ts` — Typed event bus singleton wrapping DOM `CustomEvents`. Exports `eventBus` (module-level singleton) and `FixItEventMap` type.
+  - `tokens.ts` — Service interfaces (`CoreService`, `ThemeService`, `CodeService`, etc.) used for module constructor typing.
+- **`modules/`** — Feature modules. Each is a class implementing its service interface. Dependencies are constructor-injected. Private state uses ES6 `#` fields. Modules: charts, code, content, core, encryption, events, menu, misc, search, theme, toc. `pagefind.ts` is a standalone factory consumed by `SearchModule`.
+- **`utils/`** — Pure utility functions (no side effects, no DOM state). Re-exported from `utils/index.ts`.
+- **`i18n/`** — Runtime translations for JS-only strings (not available via Hugo's `T` function or `data-*` attributes). Each language is a separate file (`en.ts`, `zh-CN.ts`, etc.) exporting a `Translations` object. Language codes match Hugo's i18n file names and `document.documentElement.lang`. Exports `t(key)` with English fallback. To add a language: create `<lang>.ts`, import in `index.ts`. To add a key: add to `Translations` interface and every language file.
+- **`lib/`** — Third-party library wrappers (aplayer, echarts, file-tree, fixit-decryptor, lightgallery, mapbox, mathjax, mermaid, etc.). All import the shared `eventBus` singleton.
+- **`head/`** — `color-scheme.ts` runs synchronously in `<head>` before body render to prevent flash of wrong theme.
+- **`pages/`** — Page-specific scripts (e.g. `link.ts` for the link guard redirection page).
+
+Cross-module communication uses the shared `eventBus` singleton, not direct module imports. The `window.fixit` facade exposes a typed public API for user custom scripts (`custom.ts`): theme control, scroll state, mask overlay management, content re-initialization, and the event bus.
+
+### Hugo Templates (`layouts/`)
+
+- **`_partials/`** — Reusable template components (organized into `init/`, `base/`, `function/`, `plugin/`, `single/`, `store/`)
+- **`_shortcodes/`** — 31 custom shortcodes (admonition, aplayer, echarts, file-tree, mermaid, tabs, timeline, etc.)
+- **`_markup/`** — 15 render hooks (code blocks, headings, images, links, tables, blockquote alerts, passthrough for math)
+
+### Asset Pipeline
+
+Hugo Pipes processes all assets. The key orchestration is in `_partials/base/assets.html`:
+
+- **CSS**: `scss/main.scss` is the entry point importing `core/`, `pages/`, `widgets/`, `custom`. SCSS variables are configured via `hugo:vars` (user-configurable from `[params.appearance]`) and `hugo:vars/internal` (theme system config). UnoCSS utility classes are pre-built to `assets/css/unocss.css` (via `pnpm unocss`), loaded before the main SCSS bundle.
+- **JS**: `_partials/function/js-build.html` wraps `js.Build` with minify-in-production defaults. Hugo's `@params` injection passes config values into TypeScript at build time.
+- **Third-party libraries**: Stored in `assets/lib/` (vendored, not npm-managed). Tracked by `librarybot.yml` and updated quarterly by the `hugo-fixit/librarybot` GitHub Action. Can be overridden via CDN config in `assets/data/cdn/jsdelivr.yml` or `unpkg.yml`.
+
+### Theme Configuration
+
+- **`hugo.toml`** — Default theme configuration (1700+ lines). Uses `_merge = "shallow"` to let user configs override without deep merging.
+- **`theme.toml`** — Theme metadata
+
+## Coding Standards
+
+### SCSS (`assets/scss/`)
+
+- CSS classes: BEM or semantic naming (`header-desktop`, `menu-item`)
+- SCSS variables: hyphen-separated, semantic (`$global-font-family`)
+- CSS custom properties: prefixed with `--fi-`, written through `@include set-fi-var(name, value)` (or `set-fi-vars` for a map); never write `--fi-*: ...` directly in SCSS
+- Runtime JS-set custom properties (e.g. `--fi-nav-scroll-x`) are the exception: set them with `style.setProperty`, and read them with `fi-var(name, fallback)`
+- Use `fi-var(name, fallback)` to reference CSS custom properties (auto-adds the `--fi-` prefix), never use `var(--fi-...)` directly
+- Within a block, put `@include` calls after all regular declarations and before nested blocks
+- Put nested selectors and at-rules after the parent block's declarations and `@include`s
+- Separate sibling blocks (nested selectors, at-rules, mixin blocks) with one blank line
+- Use CSS variables for theme switching; SCSS variables for colors (no hardcoded values)
+- Prefer relative units (rem, em, %) over absolute units
+- Keep selector nesting shallow
+
+```scss
+.sub-menu {
+  position: absolute;
+  // regular declarations...
+
+  @include set-fi-var(submenu-offset, -0.5rem);
+  @include border-radius;
+  @include z-index(base, 1);
+
+  [dir="rtl"] & {
+    @include set-fi-var(submenu-offset, 0.5rem);
+  }
+
+  .menu-item {
+    // ...
+  }
+}
+```
+
+### UnoCSS vs SCSS
+
+UnoCSS handles **placement**; SCSS handles **appearance**. Do not translate existing component styles into utilities.
+
+- Use UnoCSS for one-off layout, spacing, visibility, and alignment on template markup: `hidden`, `sr-only`, `flex`, `items-center`, `justify-center`, `w-full`, `mx-auto`, `me-1`, `my-4`, `max-sm:w-full`, `print:hidden`, theme colors (`text-secondary`, `bg-danger`), and placement wrappers in shortcodes.
+- Use SCSS for component styling: visual identity, `is-active`/`is-open` states, pseudo-elements, `--fi-*` custom properties, `light-dark()`, RTL, transitions/animations, and anything reused across templates.
+- Threshold: at most 3 utility classes on one element. Four or more means it is appearance, not placement — extract a component class.
+- Never mix both on the same concern: a component class owns its internal styling.
+- Do not use `@apply` in SCSS.
+
+Generation and constraints:
+
+- `assets/css/unocss.css` is pre-built and committed. Build and dev do **not** regenerate it: after adding or removing utility classes in `layouts/` or `assets/js/`, run `pnpm unocss` and commit the CSS. Classes that are not regenerated silently do nothing.
+- Dynamically composed class names must be written as complete literals or added to the `safelist` in `packages/unocss-preset/src/index.ts` (e.g., `order-*`, `sm:hidden`).
+- Semantic class names must not collide with utility names (e.g., `table-caption`). Add unavoidable collisions to the preset `blocklist`.
+- Responsive breakpoints: `sm:` (>=680px), `md:` (>=960px), `lg:` (>=1200px), `xl:` (>=1440px). Use `max-sm:` for xs (<680px).
+- Wrap comment prose and SVG `d` path data with `@unocss-skip-start` / `@unocss-skip-end` when they contain utility-like words (e.g., `grid`, `filter`); the extractor otherwise treats them as class names.
+
+### TypeScript
+
+- Use ES6 `#` private fields — not TypeScript `private` with `_` prefix
+- One module per file, one service interface per module
+- Constructor injection for dependencies — no global state access
+- Import the shared `eventBus` singleton from `core/event-bus` — do not create new instances
+- Pure functions only in `utils/` — no side effects, no DOM state
+- Comment style: follow [TSDoc](https://tsdoc.org/) conventions
+
+### Hugo Templates
+
+- Variable naming: camelCase (`$footerConfig`, `$fingerprint`)
+- Translation: use `T` function (`{{ T "header.switchTheme" }}`)
+- Whitespace: use `{{- -}}` trim markers
+- Multi-line comments: open with `{{- /*` and close with `*/ -}}`, with the closing marker at the start of its own line:
+
+```go
+{{- /*
+  Explanation...
+*/ -}}
+```
+- Use `partialCached` for expensive partials that don't change per page
+- Use `.Site.Store` for shared computed values (e.g. fingerprint)
+- Check `hugo.IsProduction` before adding analytics or minification
+- Minimize `id` attribute usage — prefer class selectors for styling and JS queries. Reserve `id` for: `<label for>`, `aria-controls`/`aria-labelledby`, fragment anchors, or third-party library requirements
+
+### Accessibility
+
+- Target WCAG AAA for pointer and touch targets (SC 2.5.5, 44x44 CSS px) only when visual density remains acceptable; otherwise WCAG AA (SC 2.5.8, 24x24 CSS px) is the minimum
+- When a rule exists specifically to satisfy an accessibility standard, name that standard in a comment
+
+## Commit Convention
+
+Follows [Conventional Commits](https://www.conventionalcommits.org/):
+
+```
+<type>(<scope>): <subject>
+```
+
+Types: `feat`, `fix`, `refactor`, `chore`, `docs`, `perf`, `style`, `test`, `ci`, `build`
+
+Scopes: `workflow`, `archetypes`, `assets`, `i18n`, `layouts`, `config`, or specific directories.
+
+## Pre-commit Hooks
+
+Pre-commit runs: versioning (dev mode), typecheck, lint-staged (eslint --fix on staged files).
+
+## ESLint
+
+Uses `@antfu/eslint-config` with TypeScript support. Config at `eslint.config.ts`.
