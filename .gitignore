@@ -1,6 +1,7 @@
 # Hugo build output
 public/
 resources/
+.cache/
 .hugo_build.lock
 
 # OS / editor
