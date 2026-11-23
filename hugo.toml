@@ -2,7 +2,7 @@
 # 站点基础配置
 # 部署后请把 baseURL 改成你的实际域名（如 https://xxx.pages.dev/）
 # ============================================================
-baseURL = 'https://example.org/'
+baseURL = 'https://jie13-blog.pages.dev/'
 title = 'JIE13 的博客'
 theme = 'FixIt'
 

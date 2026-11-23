@@ -36,5 +36,5 @@ export PATH="${HOME}/.local/hugo:${PATH}"
 echo "sass: $(sass --version)"
 echo "hugo: $(hugo version)"
 
-# 3. 构建站点；baseURL 优先用 Cloudflare 提供的部署地址
-hugo --gc --minify --baseURL "${CF_PAGES_URL:-https://example.org/}"
+# 3. 构建站点；baseURL 用正式生产域名（设 SITE_URL 环境变量可覆盖，方便将来绑自定义域名）
+hugo --gc --minify --baseURL "${SITE_URL:-https://jie13-blog.pages.dev/}"
